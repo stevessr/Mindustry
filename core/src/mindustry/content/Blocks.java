@@ -2094,7 +2094,7 @@ public class Blocks{
             requirements(Category.distribution, with(Items.silicon, 80, Items.surgeAlloy, 50, Items.oxide, 20));
 
             size = 3;
-            buildTime = 60f * 8f;
+            unitBuildTime = 60f * 8f;
 
             consumePower(8f / 60f);
 
@@ -2406,12 +2406,13 @@ public class Blocks{
             envEnabled = Env.any;
             generateEffect = Fx.generatespark;
 
+            itemDurationMultipliers.put(Items.phaseFabric, 210f / 14f);
             drawer = new DrawMulti(new DrawDefault(), new DrawWarmupRegion());
             consume(new ConsumeItemRadioactive());
         }};
 
         solarPanel = new SolarGenerator("solar-panel"){{
-            requirements(Category.power, with(Items.lead, 10, Items.silicon, 10));
+            requirements(Category.power, with(Items.lead, 10, Items.silicon, 8));
             powerProduction = 0.12f;
         }};
 
@@ -2453,13 +2454,13 @@ public class Blocks{
         //erekir
 
         beamNode = new BeamNode("beam-node"){{
-            requirements(Category.power, with(Items.beryllium, 10));
+            requirements(Category.power, with(Items.beryllium, 8));
             consumesPower = outputsPower = true;
             health = 90;
             range = 10;
             fogRadius = 1;
             researchCost = with(Items.beryllium, 5);
-            buildCostMultiplier = 2f;
+            buildCostMultiplier = 2.5f;
 
             consumePowerBuffered(1000f);
         }};
