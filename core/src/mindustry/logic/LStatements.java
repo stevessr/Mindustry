@@ -2,7 +2,6 @@ package mindustry.logic;
 
 import arc.*;
 import arc.audio.*;
-import arc.files.*;
 import arc.func.*;
 import arc.graphics.*;
 import arc.scene.style.*;
@@ -2446,9 +2445,8 @@ public class LStatements{
                 Sound sound = entry.value;
                 if(sound == Sounds.none || sound.file == null) continue;
 
-                String name = sound.file.nameWithoutExtension();
-                Fi parent = sound.file.parent();
-                String category = parent == null ? "other" : parent.name();
+                String name = Strings.getFileNameWithoutExtension(entry.key);
+                String category = soundCategory(entry.key);
 
                 SoundChoice choice = new SoundChoice(category, name, sound);
                 choices.add(choice);
@@ -2516,8 +2514,8 @@ public class LStatements{
                                 id = "@sfx-" + choice.name;
                                 build(table);
                                 hide.run();
-                            }).growX().left().checked(choice.name.equals(current)).padRight(4f).minWidth(540f);
-                        }).growX().padBottom(3f).minWidth(620f).row();
+                            }).growX().height(40f).left().checked(choice.name.equals(current)).padRight(4f).minWidth(540f);
+                        }).growX().height(40f).padBottom(3f).minWidth(620f).row();
                     }
                 };
 
@@ -2537,6 +2535,15 @@ public class LStatements{
                 root.add(soundList).top().width(720f);
                 rebuild.run();
             });
+        }
+
+        private static String soundCategory(String entryName){
+            String normalized = entryName.replace('\\', '/');
+            int end = normalized.lastIndexOf('/');
+            if(end < 0) return "other";
+
+            int start = normalized.lastIndexOf('/', end - 1);
+            return normalized.substring(start + 1, end);
         }
 
         private static void previewSound(Sound sound){
