@@ -5,6 +5,7 @@ import arc.audio.*;
 import arc.func.*;
 import arc.graphics.*;
 import arc.scene.style.*;
+import arc.scene.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
@@ -2507,7 +2508,7 @@ public class LStatements{
                             row.left().top();
                             row.defaults().left();
 
-                            row.button(Icon.play, Styles.cleari, 28f, () -> previewSound(choice.sound)).size(40f).padRight(6f);
+                            row.button(Icon.play, Styles.cleari, 28f, () -> previewSound(choice.sound)).update(b -> b.getStyle().imageUp = choice.sound != null && choice.sound.countPlaying() > 0 ? Icon.pause : Icon.play).size(40f).padRight(6f);
 
                             String label = "all".equals(selectedCategory[0]) ? choice.category + "/" + choice.name : choice.name;
                             row.button(label, Styles.logicTogglet, () -> {
@@ -2533,6 +2534,25 @@ public class LStatements{
                 }).top().left().width(160f).padRight(10f);
 
                 root.add(soundList).top().width(720f);
+
+                // stop preview when dialog is closed and keep silent while playing
+                root.add(new arc.scene.Element(){
+                    @Override
+                    public boolean remove(){
+                        if(lastPreview != null){
+                            lastPreview.stop();
+                        }
+                        return super.remove();
+                    }
+
+                    @Override
+                    public void act(float delta){
+                        if(lastPreview != null && lastPreview.countPlaying() > 0){
+                            control.sound.keepSilent();
+                        }
+                    }
+                });
+
                 rebuild.run();
             });
         }
@@ -2555,10 +2575,31 @@ public class LStatements{
 
             lastPreview = sound;
 
-            var bus = sound.bus;
-            sound.bus = control.sound.uiBus;
+            // set the sound's bus to the UI bus while starting playback, then restore after a short delay
+            var oldBus = sound.bus;
+            try{
+                sound.setBus(control.sound.uiBus);
+            }catch(Throwable ignored){}
+
             sound.play();
-            sound.bus = bus;
+
+            // if it didn't start, retry next frame
+            Core.app.post(() -> {
+                if(lastPreview == sound && sound.countPlaying() == 0){
+                    sound.play();
+                }
+            });
+
+            // restore original bus shortly after to avoid side-effects
+            Time.run(0.08f, () -> {
+                if(lastPreview != sound){
+                    // if another sound started, restore immediately
+                    try{ sound.setBus(oldBus); }catch(Throwable ignored){}
+                    return;
+                }
+
+                try{ sound.setBus(oldBus); }catch(Throwable ignored){};
+            });
         }
     }
 
