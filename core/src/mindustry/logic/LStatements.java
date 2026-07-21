@@ -2575,30 +2575,15 @@ public class LStatements{
 
             lastPreview = sound;
 
-            // set the sound's bus to the UI bus while starting playback, then restore after a short delay
-            var oldBus = sound.bus;
-            try{
-                sound.setBus(control.sound.uiBus);
-            }catch(Throwable ignored){}
-
-            sound.play();
+            // play sound on the UI bus to avoid conflicts with other audio output
+            sound.play(1, 1, 0, false, true, control.sound.uiBus);
 
             // if it didn't start, retry next frame
             Core.app.post(() -> {
                 if(lastPreview == sound && sound.countPlaying() == 0){
-                    sound.play();
+                    sound.bus = control.sound.uiBus;
+                    sound.play(1, 1, 0, false, true, control.sound.uiBus);
                 }
-            });
-
-            // restore original bus shortly after to avoid side-effects
-            Time.run(0.08f, () -> {
-                if(lastPreview != sound){
-                    // if another sound started, restore immediately
-                    try{ sound.setBus(oldBus); }catch(Throwable ignored){}
-                    return;
-                }
-
-                try{ sound.setBus(oldBus); }catch(Throwable ignored){};
             });
         }
     }
