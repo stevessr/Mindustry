@@ -5,7 +5,6 @@ import arc.audio.*;
 import arc.func.*;
 import arc.graphics.*;
 import arc.scene.style.*;
-import arc.scene.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
@@ -2373,20 +2372,6 @@ public class LStatements{
 
     @RegisterStatement("playsound")
     public static class PlaySoundStatement extends LStatement{
-        private static @Nullable Sound lastPreview;
-
-        private static class SoundChoice{
-            final String category;
-            final String name;
-            final Sound sound;
-
-            SoundChoice(String category, String name, Sound sound){
-                this.category = category;
-                this.name = name;
-                this.sound = sound;
-            }
-        }
-
         public boolean positional;
         public String id = "@sfx-shoot", volume = "1", pitch = "1", pan = "0", x = "@thisx", y = "@thisy", limit = "true";
 
@@ -2443,13 +2428,27 @@ public class LStatements{
             return LCategory.world;
         }
 
-        private void showSoundSelect(Button button, Table table){
+        private static @Nullable Sound lastPreview;
+
+        private static class SoundChoice{
+            final String category;
+            final String name;
+            final Sound sound;
+
+            SoundChoice(String category, String name, Sound sound){
+                this.category = category;
+                this.name = name;
+                this.sound = sound;
+            }
+        }
+
+        protected void showSoundSelect(Button button, Table table){
             Seq<SoundChoice> choices = new Seq<>();
             ObjectMap<String, Seq<SoundChoice>> categories = new ObjectMap<>();
 
             for(var entry : Core.assets.getAllEntries(Sound.class, new Seq<>())){
                 Sound sound = entry.value;
-                if(sound == Sounds.none || sound.file == null) continue;
+                if(sound == Sounds.none || sound == null || sound.file == null) continue;
 
                 String name = Strings.getFileNameWithoutExtension(entry.key);
                 String category = soundCategory(entry.key);
@@ -2470,7 +2469,7 @@ public class LStatements{
             categoryNames.insert(0, "all");
 
             for(var seq : categories.values()){
-                seq.sort((a, b) -> a.name.compareTo(b.name));
+                seq.sortComparing(a -> a.name);
             }
 
             String current = id.startsWith("@sfx-") ? id.substring(5) : id;
@@ -2504,7 +2503,7 @@ public class LStatements{
                     }
 
                     if(visible.isEmpty()){
-                        soundList.add("[lightgray]No sounds in this category.").pad(8f);
+                        soundList.add("@none.found").pad(8f);
                         return;
                     }
 
@@ -2513,15 +2512,19 @@ public class LStatements{
                             row.left().top();
                             row.defaults().left();
 
-                            row.button(Icon.play, Styles.cleari, 28f, () -> previewSound(choice.sound)).update(b -> b.getStyle().imageUp = choice.sound != null && choice.sound.countPlaying() > 0 ? Icon.pause : Icon.play).size(40f).padRight(6f);
+                            row.button(Icon.play, Styles.cleari, 28f, () -> previewSound(choice.sound))
+                            .update(b -> b.getStyle().imageUp = choice.sound != null && choice.sound == lastPreview && choice.sound.countPlaying() > 0 ? Icon.pause : Icon.play)
+                            .size(40f).padRight(6f);
 
                             String label = "all".equals(selectedCategory[0]) ? choice.category + "/" + choice.name : choice.name;
                             row.button(label, Styles.logicTogglet, () -> {
                                 id = "@sfx-" + choice.name;
                                 build(table);
                                 hide.run();
-                            }).growX().height(40f).left().checked(choice.name.equals(current)).padRight(4f).minWidth(540f);
-                        }).growX().height(40f).padBottom(3f).minWidth(620f).row();
+                            }).growX().height(40f).left().checked(choice.name.equals(current)).with(t -> {
+                                t.getLabelCell().growX().left().labelAlign(Align.left).padLeft(10f);
+                            }).padRight(4f);
+                        }).growX().height(40f).padBottom(3f).row();
                     }
                 };
 
@@ -2530,42 +2533,31 @@ public class LStatements{
                     tabs.defaults().size(140f, 34f).left();
 
                     for(String category : categoryNames){
-                        String label = "all".equals(category) ? "all" : Strings.capitalize(category);
-                        tabs.button(label, Styles.logicTogglet, () -> {
+                        tabs.button(Strings.capitalize(category), Styles.logicTogglet, () -> {
                             selectedCategory[0] = category;
                             rebuild.run();
+                            //fixes flickering
+                            var parent = (Table)root.parent.parent;
+                            parent.pack();
+                            parent.act(0f);
                         }).checked(selectedCategory[0].equals(category)).group(tabGroup).growX().row();
                     }
-                }).top().left().width(160f).padRight(10f);
+                }).top().left().width(160f);
 
-                root.add(soundList).top().width(720f);
-
-                // stop preview when dialog is closed and keep silent while playing
-                root.add(new arc.scene.Element(){
-                    @Override
-                    public boolean remove(){
-                        if(lastPreview != null){
-                            lastPreview.stop();
-                        }
-                        return super.remove();
-                    }
-
-                    @Override
-                    public void act(float delta){
-                        if(lastPreview != null && lastPreview.countPlaying() > 0){
-                            control.sound.keepSilent();
-                        }
-                    }
-                });
+                root.add(soundList).top().width(Math.min(Core.graphics.getWidth() / Scl.scl(1f) * 0.9f, 450f));
 
                 rebuild.run();
+            }, () -> {
+                if(lastPreview != null){
+                    lastPreview.stop();
+                }
             });
         }
 
         private static String soundCategory(String entryName){
             String normalized = entryName.replace('\\', '/');
             int end = normalized.lastIndexOf('/');
-            if(end < 0) return "other";
+            if(end < 0) return "Data Patch";
 
             int start = normalized.lastIndexOf('/', end - 1);
             return normalized.substring(start + 1, end);
@@ -2574,22 +2566,17 @@ public class LStatements{
         private static void previewSound(Sound sound){
             if(sound == null || sound == Sounds.none) return;
 
-            if(lastPreview != null && lastPreview.countPlaying() > 0){
+            if(lastPreview != null && lastPreview.countPlaying() > 0 && lastPreview != Sounds.uiButton){
                 lastPreview.stop();
+                if(lastPreview == sound) return; //double tap = stop
             }
 
             lastPreview = sound;
+            //don't play the button sound every time
+            if(sound != Sounds.uiButton) Sounds.uiButton.stop();
 
-            // play sound on the UI bus to avoid conflicts with other audio output
+            //play sound on the UI bus as the main one is paused
             sound.play(1, 1, 0, false, true, control.sound.uiBus);
-
-            // if it didn't start, retry next frame
-            Core.app.post(() -> {
-                if(lastPreview == sound && sound.countPlaying() == 0){
-                    sound.bus = control.sound.uiBus;
-                    sound.play(1, 1, 0, false, true, control.sound.uiBus);
-                }
-            });
         }
     }
 
